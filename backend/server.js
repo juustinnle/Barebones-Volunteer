@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const { body, validationResult } = require('express-validator');
 
 const app = express();
 const port = 3000;
@@ -8,21 +9,21 @@ const port = 3000;
 app.use(bodyParser.json());
 app.use(cors());
 
-let users = [
-];
-
-let events = [
-];
+let users = [];
+let events = [];
 let notifications = [];
 
 // Registration endpoint
-app.post('/register', (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).send('Email and password are required.');
+app.post('/register', [
+  body('email').isEmail().withMessage('Invalid email format.'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.')
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
 
+  const { email, password } = req.body;
   const userExists = users.some(user => user.email === email);
   if (userExists) {
     return res.status(400).send('User already exists.');
@@ -33,13 +34,16 @@ app.post('/register', (req, res) => {
 });
 
 // Login endpoint
-app.post('/login', (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).send('Email and password are required.');
+app.post('/login', [
+  body('email').isEmail().withMessage('Invalid email format.'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.')
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
 
+  const { email, password } = req.body;
   const user = users.find(user => user.email === email && user.password === password);
   if (!user) {
     return res.status(401).send('Invalid email or password.');
@@ -59,7 +63,19 @@ app.get('/profile/:email', (req, res) => {
 });
 
 // Update user profile endpoint
-app.put('/profile/:email', (req, res) => {
+app.put('/profile/:email', [
+  body('profile.fullName').isLength({ max: 50 }).withMessage('Full Name must be less than 50 characters long.'),
+  body('profile.address1').isLength({ max: 100 }).withMessage('Address 1 must be less than 100 characters long.'),
+  body('profile.address2').optional().isLength({ max: 100 }).withMessage('Address 2 must be less than 100 characters long.'),
+  body('profile.city').isLength({ max: 100 }).withMessage('City must be less than 100 characters long.'),
+  body('profile.state').isLength({ min: 2, max: 2 }).withMessage('State must be a 2-letter code.'),
+  body('profile.zip').isLength({ min: 5, max: 9 }).withMessage('Zip Code must be between 5 and 9 characters long.')
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   const { email } = req.params;
   const { profile } = req.body;
   const userIndex = users.findIndex(user => user.email === email);
@@ -71,15 +87,22 @@ app.put('/profile/:email', (req, res) => {
 });
 
 // Create event endpoint
-app.post('/events', (req, res) => {
-  const { name, description, location, requiredSkills, urgency, eventDates } = req.body;
-
-  if (!name || !description || !location || !requiredSkills || !urgency || !eventDates) {
-    return res.status(400).send('All fields are required.');
+app.post('/events', [
+  body('name').notEmpty().withMessage('Event name is required.'),
+  body('description').notEmpty().withMessage('Event description is required.'),
+  body('location').notEmpty().withMessage('Event location is required.'),
+  body('requiredSkills').isArray({ min: 1 }).withMessage('At least one required skill is required.'),
+  body('urgency').notEmpty().withMessage('Event urgency is required.'),
+  body('eventDates').isArray({ min: 1 }).withMessage('At least one event date is required.')
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
 
+  const { name, description, location, requiredSkills, urgency, eventDates } = req.body;
   const newEvent = {
-    id: `${Date.now()}`,
+    id: `${Date.now()}`, // Ensure the event has an ID
     name,
     description,
     location,
@@ -96,7 +119,7 @@ app.post('/events', (req, res) => {
     });
   });
 
-  res.status(201).send('Event created successfully.');
+  res.status(201).json(newEvent); // Return the new event, including its ID
 });
 
 // Get all events endpoint
@@ -106,6 +129,7 @@ app.get('/events', (req, res) => {
 
 // Delete event endpoint
 app.delete('/events/:id', (req, res) => {
+  console.log('Delete event request received:', req.params.id); // Log the request
   const { id } = req.params;
   const eventIndex = events.findIndex(event => event.id === id);
 
@@ -118,13 +142,16 @@ app.delete('/events/:id', (req, res) => {
 });
 
 // Create notification endpoint
-app.post('/notifications', (req, res) => {
-  const { email, message } = req.body;
-
-  if (!email || !message) {
-    return res.status(400).send('Email and message are required.');
+app.post('/notifications', [
+  body('email').isEmail().withMessage('Invalid email format.'),
+  body('message').notEmpty().withMessage('Notification message is required.')
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
 
+  const { email, message } = req.body;
   notifications.push({ email, message });
   res.status(201).send('Notification created successfully.');
 });
@@ -147,17 +174,18 @@ app.delete('/notifications/:email/:message', (req, res) => {
   const notificationIndex = notifications.findIndex(notification => notification.email === email && notification.message === message);
 
   if (notificationIndex === -1) {
-      return res.status(404).send('Notification not found.');
+    return res.status(404).send('Notification not found.');
   }
 
   notifications.splice(notificationIndex, 1);
   res.status(200).send('Notification deleted successfully.');
 });
 
+// Get matching events for a user
 app.get('/matching-events/:email', (req, res) => {
   const { email } = req.params;
   const user = users.find(user => user.email === email);
-  
+
   if (!user) {
     return res.status(404).send('User not found.');
   }
@@ -184,9 +212,17 @@ app.get('/matching-events/:email', (req, res) => {
 });
 
 // Match volunteer to an event endpoint
-app.post('/match-volunteer', (req, res) => {
-  const { email, eventId } = req.body;
+app.post('/match-volunteer', [
+  body('email').isEmail().withMessage('Invalid email format.'),
+  body('eventId').notEmpty().withMessage('Event ID is required.')
+], (req, res) => {
+  console.log('Match volunteer request received:', req.body); // Log the request
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
 
+  const { email, eventId } = req.body;
   const user = users.find(user => user.email === email);
   const event = events.find(event => event.id === eventId);
 
@@ -213,7 +249,6 @@ app.post('/match-volunteer', (req, res) => {
     status: 'Registered'
   });
 
-  // Send a notification to the user
   notifications.push({
     email: user.email,
     message: `You have been matched to the event: ${event.name}`
@@ -239,6 +274,11 @@ app.get('/', (req, res) => {
   res.send('Hello World!');
 });
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-});
+// Start the server only if this script is run directly (not imported)
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+  });
+}
+
+module.exports = app; // Export the app for testing
