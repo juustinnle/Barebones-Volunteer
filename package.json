@@ -9,9 +9,11 @@
     "coverage": "jest --coverage"
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "express-validator": "^6.14.0"
+    "express-validator": "^6.14.0",
+    "mysql": "^2.18.1"
   },
   "devDependencies": {
     "jest": "^27.0.6",
